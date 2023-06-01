@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <link rel="shortcut icon" href="#" />
+        <title>Babylon.js WebAR SDK</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,shrink-to-fit=no,user-scalable=no,minimal-ui,viewport-fit=cover">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="theme-color" content="black">
+
+        <!-- Babylon.js -->
+        <script src="https://cdn.babylonjs.com/babylon.js"></script>
+        <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+        <!-- WebAR SDK -->
+        <!-- PS: User may overload the splash screen by passing function string to on-load parameter
+         e.g. on-load = "LoadMySplash()" -->
+
+        <script src="../webar-sdk/webar-sdk-v1.5.3.min.js?license-key=xxxxxxxx-1111-2222-3333-yyyyyyyyyyyy"
+          on-load=""
+          webar-mode="marker-tracking"
+          debug-mode="false"
+          auto-init="true"
+          auto-start="true"
+          rendering-engine="babylonjs"
+          static-camera="true"
+          enable-tracking-on-desktop="false"
+          logo-src="https://webar-static.blippar.com/common/blogo_new.png"
+          logo-width="116px"
+          logo-height="116px"
+          progress-dot-ring-scale="0.30"
+          progress-dot-ring-color="#FFAC1C"
+          progress-ring-scale="0.36"
+          progress-ring-color="#FFFFFF"
+          progress-ring-line-width="5"
+
+          alert-border-color="#000000"
+          alert-border-width="1px"
+          alert-background-color="#FFFFFF"
+          alert-message-text-color="#000000"
+          alert-button-color="#000000"
+          alert-button-text-color="#FFFFFF"
+          alert-button-height="50px"
+          alert-camera-permission-text="We need to ask for access to the camera so this experience can work!!!"
+          alert-camera-permission-button-text="No Problem"
+          alert-motion-permission-text="Now we need access to motion sensors!!!"
+          alert-motion-permission-button-text="No Problem"
+          alert-box-width="290px"
+          alert-box-height="182px"
+          alert-box-font-size="24px"
+
+          ui-background-color="#FFF"
+          ui-text-color="#000"
+          ui-portrait-text="This experience is optimised for portrait display only"
+          desktop-logo-src="https://webar-static.blippar.com/common/blippar_logo.png"
+          desktop-logo-width="150px"
+          desktop-logo-height="150px"
+          issue-img-src="images/test_issue_img.png"
+          issue-img-width="116px"
+          issue-img-height="116px"
+          show-guide-view="true"
+
+          auto-marker-detection="true"
+          auto-scan-instruction="Look for a marker to scan..."
+          auto-scan-instruction-detect="Detecting..."
+          auto-scan-instruction-idle="Move around to look for a marker"
+          auto-scan-instruction-idle-on-desktop="Reload to detect a marker"
+          auto-scan-instruction-text-style="color: orange"
+          auto-scan-style="display: none; position: absolute; top: 90%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; width: auto; height: auto; text-align: center;"
+          auto-scan-style-display="block"
+          scan-btn-width="100"
+          scan-btn-height="100"
+          scan-btn-display="block"
+          scan-btn-instruction="Tap to scan"
+          scan-btn-instruction-style="color: white"
+          scan-btn-img-src="images/user_scan-btn-image_here.png"
+          scan-btn-img-width="50"
+          scan-btn-img-height="50"
+          scan-btn-img-x-coordinate="50%"
+          scan-btn-img-y-coordinate="50%"
+          scan-btn-img-transform="translate(-25, -25)"
+          scan-btn-progress-circle-cx-coordinate="50"
+          scan-btn-progress-circle-cy-coordinate="50"
+          scan-btn-progress-circle-radius="35"
+          scan-btn-progress-circle-style="fill: none; stroke: cyan; stroke-width: 6;"
+          scan-btn-progress-bar-cx-coordinate="50"
+          scan-btn-progress-bar-cy-coordinate="50"
+          scan-btn-progress-bar-radius="35"
+          scan-btn-progress-bar-transform="rotate(-90 50 50)"
+          scan-btn-progress-bar-color="blue"></script>
+
+        <style>
+            #renderCanvas {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              height: 100%;
+              touch-action: none;
+            }
+        </style>
+    </head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var engine = null;
+        var sceneToRender = null;
+        var webarStage = null;
+        var webarMarkerMeshMap = [];
+
+        var scaleByFactor = function(obj, factor) {
+            obj.scaling.x = obj.scaling.x * factor;
+            obj.scaling.y = obj.scaling.y * factor;
+            obj.scaling.z = obj.scaling.z * factor;
+        }
+
+        var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            scene.environmentTexture = BABYLON.CubeTexture.CreateFromPrefilteredData("./models/environment.dds", scene);
+
+            var camera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 0, 0), scene);
+
+            var light = new BABYLON.HemisphericLight("HemiLight", new BABYLON.Vector3(5, 10, -2), scene);
+            light.intensity = 0.7;
+
+            // Create two empty meshes. Models/meshes appended as a children to this empty mesh will be displayed on the corresponding mapped marker.
+            let webarMarkerMesh1 = new BABYLON.Mesh("webarMarkerMesh1", scene);
+            let webarMarkerMesh2 = new BABYLON.Mesh("webarMarkerMesh2", scene);
+
+            webarMarkerMeshMap.push({ markerId: "dddddddd-uuuu-mmmm-mmmm-yyyyyyyyyyyy", markerMesh: webarMarkerMesh1 });
+            webarMarkerMeshMap.push({ markerId: "dddddddd-uuuu-mmmm-mmmm-yyyyyyyyyyyy", markerMesh: webarMarkerMesh2 });
+
+            // Append a gltf model to the scene and scale appropriately. No need to set the parent to webarStage mesh.
+            // All gltf models appended to the scene are created under __root__ node by babylon.
+            // After the complete scene is ready, it is models under __root_ node are moved to webarStage mesh,
+            // by attachModelsToSurface function, to appear on the surface
+            BABYLON.SceneLoader.ImportMesh(null, "./models/", "astronaut.glb", scene, function (meshes, particleSystems, skeletons) {
+                let xQuat = new BABYLON.Quaternion();
+                for (mesh of meshes) {
+                    if (mesh.name !== '__root__') {
+                        // Move the loaded models to webarMarkerMesh1
+                        mesh.setParent(webarMarkerMesh1);
+                        mesh.position.y = -0.5;
+                        // BABYLON.Quaternion.FromEulerAnglesToRef(-Math.PI / 2, 0, 0, xQuat);
+                        // mesh.rotationQuaternion.multiplyInPlace(xQuat);
+
+                        scaleByFactor(mesh, 0.25);
+                    }
+                }
+            });
+
+            BABYLON.SceneLoader.ImportMesh(['Object_4', 'Object_6'], "./models/", "milk_bottle_1l.glb", scene, function (meshes, particleSystems, skeletons) {
+                for (mesh of meshes) {
+                    if (mesh.name !== '__root__') {
+                        // Move the loaded models to webarMarkerMesh2
+                        mesh.setParent(webarMarkerMesh2);
+                        mesh.position.y = -0.75;
+
+                        scaleByFactor(mesh, 5);
+                    }
+                }
+            });
+
+            // Pass babylon canvas, scene, camera and webarMarkerMeshMap array to WebarSdk to initialize marker tracking
+            WEBARSDK.InitBabylonJs(canvas, scene, camera, webarMarkerMeshMap);
+
+            return scene;
+        };
+
+        window.initFunction = async function() {
+            var asyncEngineCreation = async function() {
+                try {
+                    return createDefaultEngine();
+                } catch(e) {
+                console.log("the available createEngine function failed. Creating the default engine instead");
+                    return createDefaultEngine();
+                }
+            }
+
+            window.engine = await asyncEngineCreation();
+            if (!engine) throw 'engine should not be null.';
+            window.scene = createScene();
+        };
+
+        initFunction().then(() => {
+            sceneToRender = window.scene;
+            sceneToRender.executeWhenReady(function () {
+                engine.runRenderLoop(function () {
+                    if (sceneToRender && sceneToRender.activeCamera) {
+                        sceneToRender.render();
+                    }
+                });
+            });
+        });
+
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>

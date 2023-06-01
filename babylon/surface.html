@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <link rel="shortcut icon" href="#" />
+        <title>Babylon.js WebAR SDK</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,shrink-to-fit=no,user-scalable=no,viewport-fit=cover">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="theme-color" content="black">
+
+        <!-- Babylon.js -->
+        <script src="https://cdn.babylonjs.com/babylon.js"></script>
+        <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+        <!-- WebAR SDK -->
+        <!-- PS: User may overload the splash screen by passing function string to on-load parameter
+         e.g. on-load = "LoadMySplash()" -->
+
+        <script src="../webar-sdk/webar-sdk-v1.5.3.min.js?license-key=xxxxxxxx-1111-2222-3333-yyyyyyyyyyyy"
+          on-load=""
+          webar-mode="surface-tracking"
+          debug-mode="false"
+          auto-init="true"
+          auto-start="true"
+          rendering-engine="babylonjs"
+          static-camera="true"
+          render-scene-on-desktop="false"
+          show-qr-card-on-desktop="false"    
+          logo-src="https://webar-static.blippar.com/common/blogo_new.png"
+          logo-width="116px"
+          logo-height="116px"
+          progress-dot-ring-scale="0.30"
+          progress-dot-ring-color="#FFAC1C"
+          progress-ring-scale="0.36"
+          progress-ring-color="#FFFFFF"
+          progress-ring-line-width="5"
+
+          alert-border-color="#000000"
+          alert-border-width="1px"
+          alert-background-color="#FFFFFF"
+          alert-message-text-color="#000000"
+          alert-button-color="#000000"
+          alert-button-text-color="#FFFFFF"
+          alert-button-height="50px"
+          alert-camera-permission-text="We need to ask for access to the camera so this experience can work!!!"
+          alert-camera-permission-button-text="No Problem"
+          alert-motion-permission-text="Now we need access to motion sensors!!!"
+          alert-motion-permission-button-text="No Problem"
+          alert-box-width="290px"
+          alert-box-height="182px"
+          alert-box-font-size="24px"
+
+          ui-background-color="#FFF"
+          ui-text-color="#000"
+          ui-portrait-text="This experience is optimised for portrait display only"
+          desktop-logo-src="https://webar-static.blippar.com/common/blippar_logo.png"
+          desktop-logo-width="150px"
+          desktop-logo-height="150px"
+          issue-img-src="images/test_issue_img.png"
+          issue-img-width="116px"
+          issue-img-height="116px"
+          show-guide-view="true"></script>
+
+        <style>
+            #renderCanvas {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100vw;
+              height: 100vh;
+              touch-action: none;
+            }
+        </style>
+    </head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var engine = null;
+        var sceneToRender = null;
+        var webarStage = null;
+        var scaleByFactor = function(obj, factor) {
+            obj.scaling.x = obj.scaling.x * factor;
+            obj.scaling.y = obj.scaling.y * factor;
+            obj.scaling.z = obj.scaling.z * factor;
+        }
+
+        var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            scene.environmentTexture = BABYLON.CubeTexture.CreateFromPrefilteredData("./models/environment.dds", scene);
+
+            var camera = new BABYLON.UniversalCamera("camera1", new BABYLON.Vector3(0, 0, 0), scene);
+
+            var light = new BABYLON.HemisphericLight("HemiLight", new BABYLON.Vector3(5, 10, -2), scene);
+            light.intensity = 0.7;
+
+            // Create an empty webarStage mesh. Models/meshes appended as a children to this webarStage mesh will be displayed on the surface.
+            webarStage = new BABYLON.Mesh("webarStage", scene);
+
+            // Create a time varying PBR material for the base cylinder mesh
+            var pbr = new BABYLON.PBRMaterial("pbr", scene);
+            pbr.metallic = 0.0;
+            pbr.roughness = 0;
+            pbr.subSurface.isRefractionEnabled = true;
+            pbr.subSurface.indexOfRefraction = 1.5;
+            pbr.subSurface.tintColor = new BABYLON.Color3(0.5, 0, 0);
+            var a = 0;
+            scene.beforeRender = () => {
+                a += 0.05;
+                pbr.subSurface.tintColor.g = Math.cos(a) * 0.5 + 0.5;
+                pbr.subSurface.tintColor.b = pbr.subSurface.tintColor.g;
+            }
+
+            // Create primitive shape using mesh builder and set webarStage as its parent so that it appears on the surface
+            var cylinder = BABYLON.MeshBuilder.CreateCylinder("cylinder", {height: 0.5, diameterTop: 1, diameterBottom: 1, tessellation: 128}, scene);
+            cylinder.material = pbr;
+            cylinder.position.y = 0.125;
+            cylinder.position.z = -0.075;
+            cylinder.setParent(webarStage);
+
+            // Start spark and smoke particles
+            startParticles(scene, webarStage);
+
+            // Import a gltf model to the scene and scale appropriately. No need to set the parent to webarStage mesh.
+            // All gltf models imported to the scene are created under __root__ node by babylon.
+            // After the complete scene is ready, it is models under __root_ node are moved to webarStage mesh
+            // to appear on the surface
+            BABYLON.SceneLoader.ImportMesh(['Object_2'], "./models/", "oscar_trophy.glb", scene, function (meshes, particleSystems, skeletons) {
+                let xQuat = new BABYLON.Quaternion();
+                BABYLON.Quaternion.FromEulerAnglesToRef(Math.PI / 2, 0, 0, xQuat);
+
+                for (mesh of meshes) {
+                    if (mesh.name !== '__root__') {
+                        // Move the loaded models to webarStage
+                        mesh.setParent(webarStage);
+                        mesh.rotationQuaternion.multiplyInPlace(xQuat);
+
+                        scaleByFactor(mesh, 0.0375);
+                    }
+                }
+                // Pass babylon canvas, scene, camera and webarStage mesh to WebarSdk to initialize surface tracking
+                WEBARSDK.InitBabylonJs(canvas, scene, camera, webarStage);
+
+                webarStage.position.x = 0;
+                webarStage.position.y = -0.5;
+                webarStage.position.z = 3;
+                let yQuat = new BABYLON.Quaternion();
+                BABYLON.Quaternion.FromEulerAnglesToRef(0, Math.PI, 0, yQuat);
+                webarStage.rotationQuaternion = yQuat;
+            });
+
+            return scene;
+        };
+
+        var sparksystem = null;
+        var smokesystem = null;
+
+        var startParticles = function (scene, fountain) {
+            let sphereSpark = BABYLON.MeshBuilder.CreateSphere("sphereSpark", {diameter: 0.4, segments: 32}, scene);
+            sphereSpark.isVisible = false;
+            sphereSpark.setParent(fountain);
+            BABYLON.ParticleHelper.ParseFromFileAsync(null, "./models/spark_particles.json", scene, false).then(system => {
+                sparksystem = system;
+                system.emitter = sphereSpark;
+            });
+            let sphereSmoke = BABYLON.MeshBuilder.CreateSphere("sphereSmoke", {diameter: 1.9, segments: 32}, scene);
+            sphereSmoke.isVisible = false;
+            sphereSmoke.setParent(fountain);
+            BABYLON.ParticleHelper.ParseFromFileAsync(null, "./models/smoke_particles.json", scene, false).then(system => {
+                smokesystem = system;
+                system.emitter = sphereSmoke;
+            });
+        };
+
+        window.initFunction = async function() {
+            var asyncEngineCreation = async function() {
+                try {
+                    return createDefaultEngine();
+                } catch(e) {
+                console.log("the available createEngine function failed. Creating the default engine instead");
+                    return createDefaultEngine();
+                }
+            }
+
+            window.engine = await asyncEngineCreation();
+            if (!engine) throw 'engine should not be null.';
+            window.scene = createScene();
+        };
+
+        initFunction().then(() => {
+            sceneToRender = window.scene;
+            sceneToRender.executeWhenReady(function () {
+                engine.runRenderLoop(function () {
+                    if (sceneToRender && sceneToRender.activeCamera) {
+                        sceneToRender.render();
+                    }
+                });
+            });
+        });
+
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+
+        WEBARSDK.SetStageReadyCallback(() => {
+            console.info('Stage is ready now!!!');
+
+            // Start spark and smoke particles
+            var toggleCounter = 0;
+            setInterval(() => {
+                console.log('Restart spark');
+
+                if (toggleCounter % 2 === 0) {
+                    if (sparksystem !== null) {
+                        sparksystem.stop();
+                        sparksystem.reset();
+                        sparksystem.start()
+                    }
+                }
+                else {
+                    if (smokesystem !== null) {
+                        smokesystem.stop();
+                        smokesystem.reset();
+                        smokesystem.start();
+                    }
+                }
+
+                ++toggleCounter;
+            },
+            3000);
+        });
+
+    </script>
+</body>
+</html>

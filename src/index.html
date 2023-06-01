@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plane Tracking</title>
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="./webar-sdk-v1.5.3.min.js"></script>
+</head>
+<body>
+  <a-scene
+    webar-scene="6e247829-f6df-41cd-815a-c5709dfbc4f1"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false"
+    loading-screen="enabled: false">
+
+    <a-camera webar-camera></a-camera>
+    <a-assets>    
+        <a-asset-item
+          id="cricket_stadium"
+          src="models/cricket_stadium.glb">
+        </a-asset-item>
+    </a-assets>
+    <a-entity webar-stage>
+        
+        <a-entity gltf-model="#cricket_stadium" id="cricket_stadium_1" 
+        rotation="0 0 0" position="0 0 0" scale="0.25 0.25 0.25"
+        webar-loadmonitor="elType: glb"></a-entity>
+
+        </a-entity>
+     </a-entity>
+  </a-scene>
+</body>
+</html>
+
